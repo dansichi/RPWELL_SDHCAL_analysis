@@ -6,6 +6,7 @@ from tqdm import tqdm as tqdm
 import src.mip_eff.tb_data_handling as dh
 import argparse
 from datetime import datetime
+import os
 import warnings
 
 def eff(mode, Nchb=8, qc=False):
@@ -107,7 +108,7 @@ def plot_eff(eff_tot, pool_tot, mode, Nchb=8):
                     chambers. The chamber numbers serves as keys.  
         pool_tot :   a dictionary of the number of MIP tracks used as reference
                     for the efficiency estimation. The chamber numbers serves as keys.
-        mode :      'dt' or 'calo' for trigger-time correlated hits or CaloEvents.
+        mode     :  'dt', 'calo', or 'MC' for trigger-time correlated hits, CaloEvents, or simulation, respectively.
         Nchb :      the number of chambers in the setup. Default: 8.
     
     Return:
@@ -115,22 +116,22 @@ def plot_eff(eff_tot, pool_tot, mode, Nchb=8):
         None
     
     """
-    fig = plt.figure(figsize=(15,20), constrained_layout=False)
+    fig = plt.figure(figsize=(15, 20), constrained_layout=False)
     gs = fig.add_gridspec(nrows=3, ncols=1, left=0.05, right=0.48, wspace=0.05)
     ax1 = fig.add_subplot(gs[1, :])
     ax2 = fig.add_subplot(gs[-1, :])
     
-    fig = plt.figure(figsize=(10,7))
+    fig = plt.figure(figsize=(10, 7))
     # 16x16 cm^2 uM chambers
-    yerr = [1/np.sqrt(pool_tot[i]) for i in range(2,4)]
-    ax1.errorbar(range(2,4), [eff_tot[i] for i in range(2,4)], yerr=yerr, fmt='o',
+    yerr = [1/np.sqrt(pool_tot[i]) for i in range(2, 4)]
+    ax1.errorbar(range(2, 4), [eff_tot[i] for i in range(2, 4)], yerr=yerr, fmt='o',
                 label='Small MM')
     
     # 48x48 cm^2 uM chambers
-    yerr = [1/np.sqrt(pool_tot[i]) for i in range(4,7)]
-    ax1.errorbar(range(4,7), [eff_tot[i] for i in range(4,7)], yerr=yerr, fmt='s',
+    yerr = [1/np.sqrt(pool_tot[i]) for i in range(4, 7)]
+    ax1.errorbar(range(4, 7), [eff_tot[i] for i in range(4, 7)], yerr=yerr, fmt='s',
                 label='large MM')
-    yerr = [1/np.sqrt(pool_tot[i]) for i in range(7,12)]
+    yerr = [1/np.sqrt(pool_tot[i]) for i in range(7, Nchb+1)]
     
     # 48x48 cm^2 RPWELL chambers
     if Nchb == 11:
@@ -138,13 +139,13 @@ def plot_eff(eff_tot, pool_tot, mode, Nchb=8):
     elif Nchb == 8:
         dict_RPWELL = {7: 'ASU 61', 8: 'ASU 51'}
     
-    ax1.errorbar(range(7,Nchb+1), [eff_tot[i] for i in range(7,Nchb+1)], yerr=yerr, fmt='^',
+    ax1.errorbar(range(7, Nchb+1), [eff_tot[i] for i in range(7, Nchb+1)], yerr=yerr, fmt='^',
                 label='RPWELL')
     
-    ax1.xlabel('layer number')
-    ax1.ylim(0.4,1)
+    ax1.set_xlabel('layer number')
+    ax1.set_ylim(0.4,1)
     ax1.legend()
-    ax1.ylabel('MIP detection efficiency')
+    ax1.set_ylabel('MIP detection efficiency')
 
     # Add a table at the bottom of the axes
     # ax2.axis('tight')
@@ -158,8 +159,8 @@ def plot_eff(eff_tot, pool_tot, mode, Nchb=8):
     for i in range(7, Nchb+1):
         rowlabels.append('RPWELL {}'.format(dict_RPWELL[i]))
 
-    cell_text.append(['{:.2}'.format(eff_tot[i]*100) for i in range(2,Nchb+1)])
-    cell_text.append(['{:.2}'.format(1/np.sqrt(pool_tot[i])*100) for i in range(2,Nchb+1)])
+    cell_text.append(['{:.2}'.format(eff_tot[i] * 100) for i in range(2, Nchb+1)])
+    cell_text.append(['{:.2}'.format(1/np.sqrt(pool_tot[i]) * 100) for i in range(2, Nchb+1)])
     cell_text.append([pool_tot[i] for i in range(2, Nchb+1)])
     table = ax2.table(cellText=np.array(cell_text).T,
                         colLabels=('efficiency[%]', 'error[%]', 'tested tracks'),
@@ -190,8 +191,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-m', '--mode', help='analysis mode (dt or calo)',
-                        default='dt', choices=['dt', 'calo'])
+    parser.add_argument('-m', '--mode', help='analysis mode (dt, calo or MC)',
+                        default='dt', choices=['dt', 'calo', 'MC'])
     parser.add_argument('-n', '--Nchb', help='number of layers in the setup',
                         default='8', choices=['8', '11'])
     

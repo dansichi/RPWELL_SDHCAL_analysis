@@ -179,7 +179,7 @@ def cleaning(df, mode, time_wins=[15]):
     Parameters:
     -----------
         df       :  pandas DataFrame
-        mode     :  'dt' or 'calo' for trigger-time correlated hits or CaloEvents, respectively.
+        mode     :  'dt', 'calo', or 'MC' for trigger-time correlated hits, CaloEvents, or simulation, respectively.
         timewins :  list of relevant time windows
 
     Returns:
@@ -254,7 +254,7 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     Parameters:
     -----------
         df_batch :  pandas DataFrame containing the summary of number of hits per event, per chamber
-        mode     :  'dt' or 'calo' for trigger-time correlated hits or CaloEvents, respectively.
+        mode     :  'dt', 'calo', or 'MC' for trigger-time correlated hits, CaloEvents, or simulation, respectively.
         Nchb     :  the number of chambers in the setup. Default: 8.
         Res      :  residual threshold for hits from the reconstructed truck
 
@@ -328,7 +328,7 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
     Parameters:
     -----------
         df_mips  :  pandas DataFrame containing a list of valid MIP events for efficiency estimation
-        mode     :  'dt' or 'calo' for trigger-time correlated hits or CaloEvents, respectively.
+        mode     :  'dt', 'calo', or 'MC' for trigger-time correlated hits, CaloEvents, or simulation, respectively.
         Nchb     :  the number of chambers in the setup. Default: 8.
 
     Returns: 
