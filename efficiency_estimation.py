@@ -6,7 +6,7 @@ from tqdm import tqdm as tqdm
 import src.mip_eff.tb_data_handling as dh
 import argparse
 from datetime import datetime
-
+import warnings
 
 def eff(mode, Nchb=8, qc=False):
     """ Estimates the MIP detection efficiency for CaloEvents data.
@@ -187,6 +187,7 @@ def plot_eff(eff_tot, pool_tot, mode, Nchb=8):
 
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-m', '--mode', help='analysis mode (dt or calo)',
@@ -197,6 +198,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     mode = args.mode
     Nchb = int(args.Nchb)
+
+    warnings.simplefilter('ignore', np.RankWarning)
+    
 
     if mode not in ['calo', 'dt']:
         raise ValueError('Not a valid type of analysis mode.')

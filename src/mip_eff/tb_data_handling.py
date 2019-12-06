@@ -354,7 +354,7 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
     eff_tracks = mip_members[mip_members.agg(lambda x: set(chbl).issubset(list(x)))].shape[0]
     
     for chb in range(2, Nchb+1):
-        s = chbl.copy()
+        s = chbl[:]
         s.remove(chb)
 
         # Selecting the tracks were all chambers (excluding the tested chamber) are efficient
