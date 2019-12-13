@@ -51,6 +51,7 @@ def fixoffset(df, xoff, yoff):
     
     return df
 
+
 def filterNoisyChannels(df, Nchb = 8):
     """ Fintering noisy channels from RPWELL chambers
     The channels in the interface of the active area.
@@ -320,7 +321,6 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     del(fit)
     
     return (tofit_xyz[tofit_xyz.inbound].index.tolist(), hresx, hresy, edgey)
-
 
 
 def efficiency_estimation(df_mips, mode, Nchb=8):
