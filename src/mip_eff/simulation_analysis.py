@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-HOME = '../../data/'
+HOME = 'data/Max_20191008/'
 
 # List of simulation files provided by Max. 
 # Call with MAX_FILES[particle_type][energy][mip_threshold]
@@ -75,7 +75,7 @@ MAX_FILES = {'pions':
             }
 
 
-def readGeantFile(filename):
+def readGeantFile(filename, digit):
     """Import data from a Geant4 simulation ROOT file 
     Parameters:
     -----------
@@ -86,7 +86,7 @@ def readGeantFile(filename):
         df :     Pandas DataFrame
     """
 
-    file = uproot.open(filename)
+    file = uproot.open(HOME + filename)
     file.keys()
     tree = file['digitree']
     a = tree.array("Xpos")
@@ -97,4 +97,6 @@ def readGeantFile(filename):
 
     # Rename columns to fit the data form
     df.rename(columns = {'Xpos': 'xpos', 'Ypos': 'ypos', 'Layer':'chbid', 'Thr':'digit'}, inplace=True)
+    df = df[df.digit >= digit]
     return df
+

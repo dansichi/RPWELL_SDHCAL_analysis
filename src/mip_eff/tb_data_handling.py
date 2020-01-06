@@ -6,7 +6,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
-
+from collections import Counter
 
 def readRootFile(filename):
     """Import data from a simplified test beam ROOT file of chamber with MICROROC ASU
@@ -67,19 +67,19 @@ def filterNoisyChannels(df, Nchb = 8):
     # the first element in a row of MR is the chip ID followed by the channel ID
 
     MR = [[1, 0, 1, 4, 89, 15, 23],
-      [5, 47, 53, 58, 57, 61, 63, 62],
-      [6, 6, 13, 20, 27, 33, 39, 44, 49, 53, 57, 60, 62, 63],
-      [7, 7, 15, 23, 31, 39, 47, 55, 63],
-      [8, 0, 2, 5, 9, 13, 18, 23, 29, 35, 42, 49, 56, 63],
-      [9, 0, 1, 2, 3, 8, 9, 10, 11, 20],
-      [14, 51, 59, 58, 57, 56, 63, 62, 61, 60],
-      [15, 0, 1, 2, 3, 7, 6, 5, 4, 12],
-      [20, 63, 62, 61, 60, 55, 54, 53, 52, 43],
-      [21, 0, 1, 2, 6, 5, 10, 16],
-      [25, 63, 62, 59, 55, 54, 48, 40],
-      [26, 63, 61, 58, 54, 50, 45, 40, 34, 28, 21, 14, 7, 0],
-      [27, 0, 8, 16, 24, 32, 40, 48, 56],
-      [28, 0, 1, 3, 6, 10, 14, 19, 24, 30, 36, 43, 50, 57]]
+          [5, 47, 53, 58, 57, 61, 63, 62],
+          [6, 6, 13, 20, 27, 33, 39, 44, 49, 53, 57, 60, 62, 63],
+          [7, 7, 15, 23, 31, 39, 47, 55, 63],
+          [8, 0, 2, 5, 9, 13, 18, 23, 29, 35, 42, 49, 56, 63],
+          [9, 0, 1, 2, 3, 8, 9, 10, 11, 20],
+          [14, 51, 59, 58, 57, 56, 63, 62, 61, 60],
+          [15, 0, 1, 2, 3, 7, 6, 5, 4, 12],
+          [20, 63, 62, 61, 60, 55, 54, 53, 52, 43],
+          [21, 0, 1, 2, 6, 5, 10, 16],
+          [25, 63, 62, 59, 55, 54, 48, 40],
+          [26, 63, 61, 58, 54, 50, 45, 40, 34, 28, 21, 14, 7, 0],
+          [27, 0, 8, 16, 24, 32, 40, 48, 56],
+          [28, 0, 1, 3, 6, 10, 14, 19, 24, 30, 36, 43, 50, 57]]
     df_quiet = df.copy()
 
     for channels in MR:
@@ -189,36 +189,41 @@ def cleaning(df, mode, time_wins=[15]):
         nEvents  :  total number of stable events
     
     """
-    
-    # Select only events with less then 1000 hits
-    stable_events = df.groupby("eventId").count().xpos < 1000
-    stable_events = stable_events[stable_events].index.tolist()
+    if mode != 'MC':
+        # Select only events with less then 1000 hits
+        stable_events = df.groupby("eventId").count().xpos < 1000
+        stable_events = stable_events[stable_events].index.tolist()
 
-    df_stable = df[df.eventId.isin(stable_events)]
-    print("run {}: {:%} stable out of {} events.".format(stable_events[0][:15],
-                                                     len(stable_events)/len(df.groupby("eventId").count()),
-                                                     len(df.groupby("eventId").count())))
-    
-    if mode == "calo":
-        df_stable['id'] = df_stable[['eventId', 'dt']].apply(tuple, axis=1)
+        df_stable = df[df.eventId.isin(stable_events)]
+        print("run {}: {:%} stable out of {} events.".format(stable_events[0][:15],
+                                                        len(stable_events)/len(df.groupby("eventId").count()),
+                                                        len(df.groupby("eventId").count())))
+        
+        if mode == "calo":
+            df_stable['id'] = df_stable[['eventId', 'dt']].apply(tuple, axis=1)
 
-        # Creating Calo-Event ID to destinguish from the eventId
-        df_stable['caloId'] = df_stable.id.agg(lambda x: ((x[1]-1 in time_wins[x[0]])  * '{}_{}'.format(x[0], x[1]-1)) or 
-                                                        ((x[1] in time_wins[x[0]])  * '{}_{}'.format(x[0], x[1])) or 
-                                                        ((x[1]+1 in time_wins[x[0]]) * '{}_{}'.format(x[0], x[1]+1)) or
-                                                        ((x[1]+2 in time_wins[x[0]]) * '{}_{}'.format(x[0], x[1]+2)))
-        # keep only data in time windows
-        df_dt = df_stable[df_stable.caloId!='']
-    
-        dataId = 'caloId'
+            # Creating Calo-Event ID to destinguish from the eventId
+            df_stable['caloId'] = df_stable.id.agg(lambda x: ((x[1]-1 in time_wins[x[0]])  * '{}_{}'.format(x[0], x[1]-1)) or 
+                                                            ((x[1] in time_wins[x[0]])  * '{}_{}'.format(x[0], x[1])) or 
+                                                            ((x[1]+1 in time_wins[x[0]]) * '{}_{}'.format(x[0], x[1]+1)) or
+                                                            ((x[1]+2 in time_wins[x[0]]) * '{}_{}'.format(x[0], x[1]+2)))
+            # keep only data in time windows
+            df_dt = df_stable[df_stable.caloId!='']
+        
+            dataId = 'caloId'
+        
+        else:
+            df_dt = df_stable[df_stable.dt.isin(list(range(time_wins[0]-3,time_wins[0]+3)))]
+            dataId = 'eventId'
+
+        nEvents = len(df_dt[dataId].unique())
+        print('{} events with hits in dt'.format(nEvents))
     
     else:
-        df_dt = df_stable[df_stable.dt.isin(list(range(time_wins[0]-3,time_wins[0]+3)))]
+        df_dt = df.copy()
         dataId = 'eventId'
+        nEvents = len(df_dt[dataId].unique())
 
-    nEvents = len(df_dt[dataId].unique())
-    print('{} events with hits in dt'.format(nEvents))
-    
     # Select only events some hits in the first layer
     nhits_layer = df_dt.groupby([dataId, 'chbid']).count()
     nhits_layer = nhits_layer.reset_index(level=1)
@@ -241,11 +246,12 @@ def cleaning(df, mode, time_wins=[15]):
                                                                            len(adj_2hits_layer1))/nEvents))
     
     
+    # pandas DataFrame containing the summary of number of hits per event, per chamber
     df_batch = df_dt[(df_dt[dataId].isin(doubleHit_layer1))].groupby([dataId, 'chbid']).agg(lambda x: x.tolist()).reset_index()
     # if df_batch.shape[0] == 0:
     #     return df_batch 0
     df_batch = df_batch[df_batch[dataId].isin(singleHit_layer1 + adj_2hits_layer1)]
-    df_batch['nhits'] = df_batch.applymap(lambda x: len(str(x).split(',')))['dt']
+    df_batch['nhits'] = df_batch.applymap(lambda x: len(str(x).split(',')))['xpos'] # xpos is selected just to extract the number of hits
 
     return df_batch, nEvents
 
@@ -344,23 +350,30 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
 
     eff = {}
     pool = {}
+    mult = {}
     mip_members = df_mips.groupby(dataId).agg(lambda x: x.tolist())['chbid']
+    counter = mip_members
     if Nchb == 11:
         chbl = [1,2,3,4,5,6,7,8,9,10,11]
     else:
         chbl = [1,2,3,4,5,6,7,8]
 
     # Selecting the tracks were all chambers are efficient
-    eff_tracks = mip_members[mip_members.agg(lambda x: set(chbl).issubset(list(x)))].shape[0]
+    eff_tracks = mip_members[mip_members.agg(lambda x: set(chbl).issubset(list(x)))]
+    neff_tracks = eff_tracks.shape[0]
     
+    # Number of hits in each chamber
+    mult_in_track = eff_tracks.agg(lambda x: Counter(x))
+
     for chb in range(2, Nchb+1):
+        mult[chb] = mult_in_track.agg(lambda x: x[chb]).sum() / neff_tracks
+    
         s = chbl[:]
         s.remove(chb)
 
         # Selecting the tracks were all chambers (excluding the tested chamber) are efficient
         chb_pool = mip_members[mip_members.agg(lambda x: set(s).issubset(list(x)))].shape[0]
-        
-        eff[chb] = eff_tracks/chb_pool
+        eff[chb] = neff_tracks/chb_pool
         pool[chb] = chb_pool
 
-    return eff, pool
+    return eff, pool, mult
