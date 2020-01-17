@@ -7,6 +7,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from collections import Counter
+from datetime import datetime
+
+import os
+import errno
 
 def readRootFile(filename):
     """Import data from a simplified test beam ROOT file of chamber with MICROROC ASU
@@ -278,15 +282,21 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     else:
         dataId = 'eventId'
 
-    # up to two adjecent hits in each layer
+    # up to two adjacent hits in each layer
     df_mip = df_batch[df_batch.nhits <= 2]
-    # finding layers with non-adjecent two hits
+    
+    # finding layers with non-adjacent two hits
     no_mip = df_mip[df_mip.nhits == 2]
     no_mip['pos'] = list(zip(no_mip.xpos, no_mip.ypos))
     no_mip = no_mip[dataId][no_mip.pos.apply(lambda x:np.sqrt((x[0][0]-x[0][1])**2 +
                                                     (x[1][0]-x[1][1])**2) > 1)].tolist()
     df_mip = df_mip[~df_mip[dataId].isin(no_mip)]
     
+    # UPDATE 06-01-2020: keep only tracks with least Nchb-1 MIP-like layers
+    df_mip_evt = df_mip.groupby(dataId).count()
+    valid_trks = df_mip_evt[df_mip_evt['chbid'] > Nchb-2].index.tolist()
+    df_mip = df_mip[df_mip[dataId].isin(valid_trks)]    
+
     # preparing for fit
     tofit = df_mip.groupby(dataId).agg(lambda x: x.tolist())[['chbid', 'xpos', 'ypos', 'nhits']]
     tofit_xyz = tofit[['xpos', 'ypos']].applymap(lambda x: np.concatenate(np.array(x)).ravel())
@@ -310,6 +320,9 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     tofit_xyz['inbound'] = residuals[['xres', 'yres']].apply(tuple, axis=1).\
                            agg(lambda x: sum(x[0] > res)+sum(x[1] > res) == 0 )
     
+   
+    
+
     l = []
     for i in residuals.xres.values.flatten():
         l += list(i)
@@ -333,7 +346,9 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
     """MIP detection estimation for 
     Parameters:
     -----------
-        df_mips  :  pandas DataFrame containing a list of valid MIP events for efficiency estimation
+        df_mips  :  pandas DataFrame containing a list of valid MIP events for efficiency estimation.
+                    Note: A valid MIP event can have only one layer with non-MIP characteristics 
+                    (i.e. not hits, 2 sparse hits, or more than 2 hits)
         mode     :  'dt', 'calo', or 'MC' for trigger-time correlated hits, CaloEvents, or simulation, respectively.
         Nchb     :  the number of chambers in the setup. Default: 8.
 
@@ -351,6 +366,7 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
     eff = {}
     pool = {}
     mult = {}
+
     mip_members = df_mips.groupby(dataId).agg(lambda x: x.tolist())['chbid']
     counter = mip_members
     if Nchb == 11:
@@ -360,20 +376,51 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
 
     # Selecting the tracks were all chambers are efficient
     eff_tracks = mip_members[mip_members.agg(lambda x: set(chbl).issubset(list(x)))]
-    neff_tracks = eff_tracks.shape[0]
-    
+
+    # Tracks that has one chamber with more than 2 hits
+    eff_tracks_exceptional = df_mips[df_mips.nhits > 2][[dataId,'chbid']]
+
+    # Tracks that has 2 sparse hits
+    df_mips['pos'] = list(zip(df_mips.xpos, df_mips.ypos))
+    sparse_hits = df_mips[dataId][(df_mips.nhits == 2) &
+                                 (df_mips.pos.apply(lambda x:
+                                    np.sqrt((x[0][0]-x[0][1])**2 +
+                                            (x[1][0]-x[1][1])**2) > 1))]
+
+
     # Number of hits in each chamber
     mult_in_track = eff_tracks.agg(lambda x: Counter(x))
+    
+    if not os.path.isdir('./figures'):
+        os.mkdir("./figures")
 
     for chb in range(2, Nchb+1):
-        mult[chb] = mult_in_track.agg(lambda x: x[chb]).sum() / neff_tracks
-    
         s = chbl[:]
         s.remove(chb)
+        # Selecting the tracks where all chambers (excluding the tested chamber) are efficient
+        chb_pool = mip_members[mip_members.agg(lambda x: set(s).issubset(list(x)))].index.to_list()
 
-        # Selecting the tracks were all chambers (excluding the tested chamber) are efficient
-        chb_pool = mip_members[mip_members.agg(lambda x: set(s).issubset(list(x)))].shape[0]
+        # list of relevant pool events
+        pool_tracks =  df_mips[(df_mips[dataId].isin(chb_pool)) &
+                               (~df_mips[dataId].isin(eff_tracks_exceptional[eff_tracks_exceptional.chbid != chb][dataId].tolist())) &
+                               (~df_mips[dataId].isin(sparse_hits[sparse_hits.chbid != chb][dataId].tolist())) ]
+        df_mips.groupby(dataId)
+
+        # multiplicity in chamber for relevant tracks
+        mult_in_track = pool_tracks.nhits[(df_mips.chbid == chb)]
+
+        neff_tracks = mult_in_track.shape[0]
+
+        fig = plt.figure()
+        plt.hist(mult_in_track)
+        plt.title("chb {}: mult mean = {}; mult std={}".format(chb, mult_in_track.mean(), mult_in_track.std()))
+        plt.savefig('figures/hist_mip_mult_{}layers_chb{}_{}_{}.png'.format(Nchb, chb, mode, datetime.now().strftime('%Y%m%d_%H%M')))
+        del(fig)
+        
+        mult[chb] = mult_in_track.mean()
+        print("chb {}: mult mean = {}; mult std={}".format(chb, mult_in_track.mean(), mult_in_track.std()))
+        
         eff[chb] = neff_tracks/chb_pool
         pool[chb] = chb_pool
-
+        
     return eff, pool, mult

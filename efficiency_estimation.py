@@ -29,15 +29,16 @@ def eff(mode, Nchb=8, qc=False):
     if mode == 'calo':
         print('Running efficiency estimation for hits in CaloEvents.')
         dataId = 'caloId'
+        df_MIPs = pd.DataFrame(columns = ['eventId', 'chbid', 'xpos', 'ypos', 'dt', 'digit', 'chipid', 'hardid',
+        'nhits', 'caloId'])
     else:
         print('Running efficiency estimation for hits which are time-correlated with the trigger.')
         dataId = 'eventId'
+        df_MIPs = pd.DataFrame(columns = ['eventId', 'chbid', 'xpos', 'ypos', 'dt', 'digit', 'chipid', 'hardid',
+        'nhits'])
 
     runList = pd.read_csv('data/eScan{}Layers.csv'.format(Nchb))
     l = runList.shape[0]
-
-    df_MIPs = pd.DataFrame(columns = ['eventId', 'chbid', 'xpos', 'ypos', 'dt', 'digit', 'chipid', 'hardid',
-        'nhits'])
 
     # for selection quality control purpose
     if qc:
@@ -84,6 +85,7 @@ def eff(mode, Nchb=8, qc=False):
 
                 print ('{:.2%} of events are valid MIPs'.format(len(effective_MIPs)/nEvents))
                 df_batch = df_batch[df_batch[dataId].isin(effective_MIPs)]
+                
                 df_batch[dataId] = df_batch[dataId].agg(lambda x: '{}_{}'.format(runId, x))
                 df_MIPs = pd.concat([df_MIPs,df_batch], axis=0)
 
@@ -96,7 +98,7 @@ def eff(mode, Nchb=8, qc=False):
                     eff_runs['eff'].append(eff_run)
                     eff_runs['pool'].append(pool_run)
 
-
+    
     eff_tot, pool_tot, mult_tot = dh.efficiency_estimation(df_MIPs, mode, Nchb)
     return eff_tot, pool_tot, mult_tot
 
@@ -168,7 +170,6 @@ def plot_eff(eff_tot, pool_tot, mode, Nchb=8):
     ax1 = fig.add_subplot(gs[1, :])
     ax2 = fig.add_subplot(gs[-1, :])
     
-    fig = plt.figure(figsize=(10, 7))
     # 16x16 cm^2 uM chambers
     yerr = [1/np.sqrt(pool_tot[i]) for i in range(2, 4)]
     ax1.errorbar(range(2, 4), [eff_tot[i] for i in range(2, 4)], yerr=yerr, fmt='o',
@@ -221,11 +222,11 @@ def plot_eff(eff_tot, pool_tot, mode, Nchb=8):
     if not os.path.isdir('./figures'):
         os.mkdir("./figures")
     
-    plt.savefig('/figures/mip_eff_{}layers_{}_{}.png'.format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')))
+    fig.savefig('figures/mip_eff_{}layers_{}_{}.png'.format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')))
 
-    plt.show()
-
-    print('| ASU | Effieicny \[%\] | number of tested tracks|')
+    # plt.show()
+    del(fig)
+    print('| ASU | Effieicny [%] | number of tested tracks|')
     print('|------|----------------|-----------------------|')
     for i in range(7,Nchb+1):
         print("|{} | {:.2}+\-{:.2} \t| {} |".format(dict_RPWELL[i],
@@ -251,11 +252,11 @@ def plot_mult(mult_tot, mode, Nchb=8):
 
     fig = plt.figure(figsize=(10, 7))
     # 16x16 cm^2 uM chambers
-    plt.scatter(range(2, 4), [mult_tot[i] for i in range(2, 4)], fmt='o',
+    plt.scatter(range(2, 4), [mult_tot[i] for i in range(2, 4)], 
                 label='Small MM')
     
     # 48x48 cm^2 uM chambers
-    plt.scatter(range(4, 7), [mult_tot[i] for i in range(4, 7)], fmt='s',
+    plt.scatter(range(4, 7), [mult_tot[i] for i in range(4, 7)],
                 label='large MM')
     
     # 48x48 cm^2 RPWELL chambers
@@ -264,7 +265,7 @@ def plot_mult(mult_tot, mode, Nchb=8):
     elif Nchb == 8:
         dict_RPWELL = {7: 'ASU 61', 8: 'ASU 51'}
     
-    plt.scatter(range(7, Nchb+1), [mult_tot[i] for i in range(7, Nchb+1)], fmt='^',
+    plt.scatter(range(7, Nchb+1), [mult_tot[i] for i in range(7, Nchb+1)],
                 label='RPWELL')
     
     plt.xlabel('layer number')
@@ -276,15 +277,14 @@ def plot_mult(mult_tot, mode, Nchb=8):
     if not os.path.isdir('./figures'):
         os.mkdir("./figures")
     
-    plt.savefig('/figures/mip_mult_{}layers_{}_{}.png'.format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')))
+    fig.savefig('figures/mip_mult_{}layers_{}_{}.png'.format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')))
 
-    plt.show()
-
+    # plt.show()
+    del(fig)
     print('| \# of Chamber | Multiplicity |')
     print('|------|----------------|-----------------------|')
     for i in range(7,Nchb+1):
-        print("|{} | {:.2}+\-{:.2} \t|".format(i,
-                                               mult_tot[i]))
+        print("|{} | {:.2} \t|".format(i, mult_tot[i]))
 
 if __name__ == "__main__":
 
@@ -317,10 +317,10 @@ if __name__ == "__main__":
         raise ValueError('Not a valid type of analysis mode.')
 
     if mode == 'MC':
-        eff_MC(energy, mipeff, particle=particle, Nchb=Nchb)
+        eff_tot, pool_tot, mult_tot = eff_MC(energy, mipeff, particle=particle, Nchb=Nchb)
         plot_eff(eff_tot, pool_tot, 'MC', Nchb)
         plot_mult(mult_tot, 'MC', Nchb)
     else:
-        eff_tot, pool_tot = eff(mode, Nchb=Nchb)
+        eff_tot, pool_tot, mult_tot = eff(mode, Nchb=Nchb)
         plot_eff(eff_tot, pool_tot, mode, Nchb)
         plot_mult(mult_tot, mode, Nchb)
