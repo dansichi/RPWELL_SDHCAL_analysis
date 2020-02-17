@@ -9,6 +9,7 @@ import argparse
 from datetime import datetime
 import os
 import warnings
+import csv
 
 def eff(mode, Nchb=8, qc=False):
     """ Estimates the MIP detection efficiency for CaloEvents data.
@@ -103,8 +104,10 @@ def eff(mode, Nchb=8, qc=False):
                     eff_runs['eff'].append(eff_run)
                     eff_runs['pool'].append(pool_run)
 
-
     eff_tot, pool_tot, mult_tot = dh.efficiency_estimation(df_MIPs, mode, Nchb)
+
+    dh.exporter(eff_tot, pool_tot, mult_tot)
+
     return eff_tot, pool_tot, mult_tot
 
 
@@ -192,6 +195,10 @@ def plot_eff(eff_tot, pool_tot, mode, Nchb=8):
     elif Nchb == 8:
         dict_RPWELL = {7: 'ASU 61', 8: 'ASU 51'}
     
+    # saving dato to csv
+    if not os.path.isdir('./results'):
+        os.mkdir("./results")
+
     ax1.errorbar(range(7, Nchb+1), [eff_tot[i] for i in range(7, Nchb+1)], yerr=yerr, fmt='^',
                 label='RPWELL')
     
@@ -269,7 +276,7 @@ def plot_mult(mult_tot, mode, Nchb=8):
         dict_RPWELL = {7: 'ASU 61', 8: 'ASU 60', 9: 'ASU 51', 10: 'ASU 57', 11: 'ASU 52'}
     elif Nchb == 8:
         dict_RPWELL = {7: 'ASU 61', 8: 'ASU 51'}
-    
+
     plt.scatter(range(7, Nchb+1), [mult_tot[i] for i in range(7, Nchb+1)],
                 label='RPWELL')
     

@@ -424,3 +424,29 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
         pool[chb] = pool_tracks[dataId].unique().shape[0]
         
     return eff, pool, mult
+
+
+def exporter(eff, pool, mult):
+    
+    # 48x48 cm^2 RPWELL chambers
+    if Nchb == 11:
+        dict_RPWELL = {7: 'ASU 61', 8: 'ASU 60', 9: 'ASU 51', 10: 'ASU 57', 11: 'ASU 52'}
+    elif Nchb == 8:
+        dict_RPWELL = {7: 'ASU 61', 8: 'ASU 51'}
+
+    # saving dato to csv
+    if not os.path.isdir('./results'):
+        os.mkdir("./results")
+        
+    with open('./results/mip_performance_{}layers_{}_{}.csv'.format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')), mode='w') as exportfile:
+        
+        exporter = csv.writer(exportfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        exporter.writerow(['chamber', 'type', 'efficiency', 'pool of tracks', 'average_multiplicity'])
+        
+        for i in range(2, len(mult_tot)):
+            if i in range(2, 4):
+                exporter.writerow([i , 'Small MM', eff[i], pool[i], mult[i]])
+            elif i in range(4, 7):
+                exporter.writerow([i , 'Large MM', eff[i], pool[i], mult[i]])
+            else:
+                exporter.writerow([i , dict_RPWELL[i], eff[i], pool[i], mult[i]])
