@@ -412,11 +412,14 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
         neff_tracks = mult_in_track.shape[0]
 
         fig = plt.figure()
-        plt.hist(mult_in_track)
+        ValList, bins, _ = plt.hist(mult_in_track)
         plt.title("chb {}: mult mean = {}; mult std={}".format(chb, mult_in_track.mean(), mult_in_track.std()))
         plt.savefig('figures/hist_mip_mult_{}layers_chb{}_{}_{}.png'.format(Nchb, chb, mode, datetime.now().strftime('%Y%m%d_%H%M')))
         del(fig)
         
+        data = zip(*np.histogram(ValList,bins))
+        np.savetxt('./results/mip_mult_hist_chb{}_{}_{}.csv'.format(chb, mode, datetime.now().strftime('%Y%m%d_%H%M')), data, delimeter=',')
+
         mult[chb] = mult_in_track.mean()
         print("chb {}: mult mean = {}; mult std={}".format(chb, mult_in_track.mean(), mult_in_track.std()))
         
@@ -426,18 +429,18 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
     return eff, pool, mult
 
 
-def exporter(eff, pool, mult):
+def exporter(eff, pool, mult, Nchb):
     
     # 48x48 cm^2 RPWELL chambers
     if Nchb == 11:
         dict_RPWELL = {7: 'ASU 61', 8: 'ASU 60', 9: 'ASU 51', 10: 'ASU 57', 11: 'ASU 52'}
-    elif Nchb == 8:
+    elif Nchb in [7, 8]:
         dict_RPWELL = {7: 'ASU 61', 8: 'ASU 51'}
 
     # saving dato to csv
     if not os.path.isdir('./results'):
         os.mkdir("./results")
-        
+
     with open('./results/mip_performance_{}layers_{}_{}.csv'.format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')), mode='w') as exportfile:
         
         exporter = csv.writer(exportfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)

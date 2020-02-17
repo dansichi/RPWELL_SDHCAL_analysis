@@ -106,7 +106,7 @@ def eff(mode, Nchb=8, qc=False):
 
     eff_tot, pool_tot, mult_tot = dh.efficiency_estimation(df_MIPs, mode, Nchb)
 
-    dh.exporter(eff_tot, pool_tot, mult_tot)
+    dh.exporter(eff_tot, pool_tot, mult_tot, Nchb)
 
     return eff_tot, pool_tot, mult_tot
 
