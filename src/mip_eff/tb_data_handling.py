@@ -381,11 +381,11 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
     eff_tracks_exceptional = df_mips[df_mips.nhits > 2][[dataId,'chbid']]
 
     # Tracks that has 2 sparse hits
-    df_mips['pos'] = list(zip(df_mips.xpos, df_mips.ypos))
-    sparse_hits = df_mips[dataId][(df_mips.nhits == 2) &
-                                 (df_mips.pos.apply(lambda x:
-                                    np.sqrt((x[0][0]-x[0][1])**2 +
-                                            (x[1][0]-x[1][1])**2) > 1))]
+    sparse_hits = df_mips[(df_mips.nhits == 2)]
+    sparse_hits['pos'] = list(zip(sparse_hits.xpos, sparse_hits.ypos))
+    sparse_hits = sparse_hits[sparse_hits.pos.apply(lambda x:
+                                      np.sqrt((x[0][0]-x[0][1])**2 +
+                                              (x[1][0]-x[1][1])**2) > 1)][[dataId,'chbid']]
 
 
     # Number of hits in each chamber
@@ -402,12 +402,12 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
 
         # list of relevant pool events
         pool_tracks =  df_mips[(df_mips[dataId].isin(chb_pool)) &
-                               (~df_mips[dataId].isin(eff_tracks_exceptional[eff_tracks_exceptional.chbid != chb][dataId].tolist())) &
-                               (~df_mips[dataId].isin(sparse_hits[sparse_hits.chbid != chb][dataId].tolist())) ]
-        df_mips.groupby(dataId)
+                               (~df_mips[dataId].isin(eff_tracks_exceptional[dataId][eff_tracks_exceptional.chbid != chb].tolist())) &
+                               (~df_mips[dataId].isin(sparse_hits[dataId][sparse_hits.chbid != chb].tolist())) ]
+        # df_mips = df_mips.groupby(dataId)
 
         # multiplicity in chamber for relevant tracks
-        mult_in_track = pool_tracks.nhits[(df_mips.chbid == chb)]
+        mult_in_track = pool_tracks.nhits[(pool_tracks.chbid == chb)]
 
         neff_tracks = mult_in_track.shape[0]
 
@@ -420,7 +420,7 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
         mult[chb] = mult_in_track.mean()
         print("chb {}: mult mean = {}; mult std={}".format(chb, mult_in_track.mean(), mult_in_track.std()))
         
-        eff[chb] = neff_tracks/chb_pool
-        pool[chb] = chb_pool
+        eff[chb] = neff_tracks/pool_tracks[dataId].unique().shape[0]
+        pool[chb] = pool_tracks[dataId].unique().shape[0]
         
     return eff, pool, mult

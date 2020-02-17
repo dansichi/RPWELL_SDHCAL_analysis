@@ -37,7 +37,11 @@ def eff(mode, Nchb=8, qc=False):
         df_MIPs = pd.DataFrame(columns = ['eventId', 'chbid', 'xpos', 'ypos', 'dt', 'digit', 'chipid', 'hardid',
         'nhits'])
 
-    runList = pd.read_csv('data/eScan{}Layers.csv'.format(Nchb))
+    if Nchb == 7:
+        runList = pd.read_csv('data/eScan8Layers.csv')
+    else:
+        runList = pd.read_csv('data/eScan{}Layers.csv'.format(Nchb))
+    
     l = runList.shape[0]
 
     # for selection quality control purpose
@@ -45,7 +49,7 @@ def eff(mode, Nchb=8, qc=False):
         eff_runs = {'run': [], 'eff': [], 'pool': []}
 
     # Define list of excluded runs
-    if Nchb == 8:
+    if Nchb == 8 or Nchb == 7:
         excluded_runs = ['0036', '0650', '0712']
     elif Nchb == 11:
         excluded_runs = ['0018', '0726']
@@ -59,7 +63,8 @@ def eff(mode, Nchb=8, qc=False):
             runId = '{:08d}-{:04d}-{}'.format(run["day"], run["time"], run["index"])
             print(runId)
             df = dh.read_nov18run(run, Nchb=Nchb)
-            
+            df = df[df.chbid <= Nchb]
+
             if mode == 'calo':
                 time_wins = dh.calo_time_wins(df)
             else:
@@ -98,7 +103,7 @@ def eff(mode, Nchb=8, qc=False):
                     eff_runs['eff'].append(eff_run)
                     eff_runs['pool'].append(pool_run)
 
-    
+
     eff_tot, pool_tot, mult_tot = dh.efficiency_estimation(df_MIPs, mode, Nchb)
     return eff_tot, pool_tot, mult_tot
 
@@ -293,7 +298,7 @@ if __name__ == "__main__":
     parser.add_argument('-m', '--mode', help='analysis mode (dt, calo or MC)',
                         default='dt', choices=['dt', 'calo', 'MC'])
     parser.add_argument('-n', '--Nchb', help='number of layers in the setup',
-                        default='8', choices=['8', '11'])
+                        default='8', choices=['8', '11', '7'])
     parser.add_argument('-e', '--energy', type=int, help='beam energy in GeV.',
                         choices=range(1,7))
     parser.add_argument('--mipeff', help='mip efficiency')
