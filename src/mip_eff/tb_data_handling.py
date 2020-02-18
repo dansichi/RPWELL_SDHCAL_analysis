@@ -394,6 +394,9 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
     if not os.path.isdir('./figures'):
         os.mkdir("./figures")
 
+    resultsfile = uproot.recreate('./results/multiplicity_{}layers_{}_{}.root'\
+                           .format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')),
+                           compression=uproot.ZLIB(4))
     for chb in range(2, Nchb+1):
         s = chbl[:]
         s.remove(chb)
@@ -409,6 +412,7 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
         # multiplicity in chamber for relevant tracks
         mult_in_track = pool_tracks.nhits[(pool_tracks.chbid == chb)]
 
+        resultsfile['hmult_chb{}'.format(chb)] = np.histogram(mult_in_track, bins=range(max(mult_in_track)+2))
         neff_tracks = mult_in_track.shape[0]
 
         fig = plt.figure()
@@ -416,10 +420,8 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
         plt.title("chb {}: mult mean = {}; mult std={}".format(chb, mult_in_track.mean(), mult_in_track.std()))
         plt.savefig('figures/hist_mip_mult_{}layers_chb{}_{}_{}.png'.format(Nchb, chb, mode, datetime.now().strftime('%Y%m%d_%H%M')))
         del(fig)
-        
-        data = zip(*np.histogram(ValList,bins))
-        np.savetxt('./results/mip_mult_hist_chb{}_{}_{}.csv'.format(chb, mode, datetime.now().strftime('%Y%m%d_%H%M')), data, delimeter=',')
 
+        
         mult[chb] = mult_in_track.mean()
         print("chb {}: mult mean = {}; mult std={}".format(chb, mult_in_track.mean(), mult_in_track.std()))
         
