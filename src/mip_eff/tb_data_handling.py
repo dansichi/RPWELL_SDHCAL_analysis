@@ -8,6 +8,10 @@ import numpy as np
 from tqdm import tqdm
 from collections import Counter
 from datetime import datetime
+import csv 
+
+from src.mip_eff.cluster import cluster
+from scipy.spatial.distance import cdist 
 
 import os
 import errno
@@ -288,6 +292,8 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     # finding layers with non-adjacent two hits
     no_mip = df_mip[df_mip.nhits == 2]
     no_mip['pos'] = list(zip(no_mip.xpos, no_mip.ypos))
+    # no_mip = no_mip[dataId][no_mip.pos.apply(lambda x:np.sqrt((x[0][0]-x[0][1])**2 +
+    #                                                 (x[1][0]-x[1][1])**2) > 1)].tolist()
     no_mip = no_mip[dataId][no_mip.pos.apply(lambda x:np.sqrt((x[0][0]-x[0][1])**2 +
                                                     (x[1][0]-x[1][1])**2) > 1)].tolist()
     df_mip = df_mip[~df_mip[dataId].isin(no_mip)]
@@ -309,7 +315,7 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     fit = pd.DataFrame({'zx': tofit_xyz[['chbid', 'xpos']].apply(tuple, axis=1),
                     'zy': tofit_xyz[['chbid', 'ypos']].apply(tuple, axis=1)})
     tofit_xyz[['zx', 'zy']] = fit.applymap(lambda p: np.polyfit(p[0], p[1], 1))
-    
+    df_batch[['zx', 'zy']] = tofit_xyz[['zx', 'zy']]
     # Calculating residuals
     residuals = pd.DataFrame({'x': tofit_xyz[['xpos', 'zx', 'chbid']].apply(tuple, axis=1),
                               'y': tofit_xyz[['ypos', 'zy', 'chbid']].apply(tuple, axis=1)})
@@ -319,9 +325,19 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     # A MIP should have residual < 1 
     tofit_xyz['inbound'] = residuals[['xres', 'yres']].apply(tuple, axis=1).\
                            agg(lambda x: sum(x[0] > res)+sum(x[1] > res) == 0 )
-    
-   
-    
+
+    df_batch['zx0'] = ""
+    df_batch['zy0'] = ""
+    df_batch['zx1'] = ""
+    df_batch['zy1'] = ""
+
+    # saving the fit parameters
+    for i in tofit_xyz.index.tolist():
+        
+        df_batch.loc[df_batch[dataId] == i, ['zx0']] = tofit_xyz['zx'][i][0]
+        df_batch.loc[df_batch[dataId] == i, ['zx1']] = tofit_xyz['zx'][i][1]
+        df_batch.loc[df_batch[dataId] == i, ['zy0']] = tofit_xyz['zy'][i][0]
+        df_batch.loc[df_batch[dataId] == i, ['zy1']] = tofit_xyz['zy'][i][1]
 
     l = []
     for i in residuals.xres.values.flatten():
@@ -366,19 +382,32 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
     eff = {}
     pool = {}
     mult = {}
+    df_mips['cl_members'] = ""
+    # Filtering the hits in each layer to contain only relevant cluster hits
+    for i in range(df_mips.shape[0]):
+        p = [df_mips.zx0.iloc[i]*df_mips.chbid.iloc[i] + df_mips.zx1.iloc[i],
+            df_mips.zy0.iloc[i]*df_mips.chbid.iloc[i] + df_mips.zy1.iloc[i]]
+        # print('chamber: {}'.format(df_mips.chbid.iloc[i]))
+        # print("x: {}".format(df_mips.xpos.iloc[i]))
+        # print("y: {}".format(df_mips.ypos.iloc[i]))
+        cl = cluster(df_mips.xpos.iloc[i], df_mips.ypos.iloc[i]) 
+        # cl.seeding(p, 5)
+        df_mips['cl_members'].iloc[i] = cl.cluster(p, 2)
+    print( df_mips['cl_members'])
 
     mip_members = df_mips.groupby(dataId).agg(lambda x: x.tolist())['chbid']
-    counter = mip_members
-    if Nchb == 11:
-        chbl = [1,2,3,4,5,6,7,8,9,10,11]
-    else:
-        chbl = [1,2,3,4,5,6,7,8]
+    chbl = list(range(1,Nchb+1))
 
     # Selecting the tracks were all chambers are efficient
     eff_tracks = mip_members[mip_members.agg(lambda x: set(chbl).issubset(list(x)))]
 
     # Tracks that has one chamber with more than 2 hits
     eff_tracks_exceptional = df_mips[df_mips.nhits > 2][[dataId,'chbid']]
+    
+    # ### DEBUG
+    # df_mips.to_csv('debug_df_mips.csv', index=False)
+    # ### End DEBUG
+
 
     # Tracks that has 2 sparse hits
     sparse_hits = df_mips[(df_mips.nhits == 2)]
@@ -389,10 +418,13 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
 
 
     # Number of hits in each chamber
-    mult_in_track = eff_tracks.agg(lambda x: Counter(x))
+    # mult_in_track = eff_tracks.agg(lambda x: Counter(x))
     
     if not os.path.isdir('./figures'):
         os.mkdir("./figures")
+
+    if not os.path.isdir('./results'):
+        os.mkdir("./results")
 
     resultsfile = uproot.recreate('./results/multiplicity_{}layers_{}_{}.root'\
                            .format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')),
@@ -410,7 +442,7 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
         # df_mips = df_mips.groupby(dataId)
 
         # multiplicity in chamber for relevant tracks
-        mult_in_track = pool_tracks.nhits[(pool_tracks.chbid == chb)]
+        mult_in_track = pool_tracks['cl_members'][(pool_tracks.chbid == chb)].agg(lambda x: len(x))
 
         resultsfile['hmult_chb{}'.format(chb)] = np.histogram(mult_in_track, bins=range(max(mult_in_track)+2))
         neff_tracks = mult_in_track.shape[0]
@@ -431,7 +463,7 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
     return eff, pool, mult
 
 
-def exporter(eff, pool, mult, Nchb):
+def exporter(eff, pool, mult, mode, Nchb):
     
     # 48x48 cm^2 RPWELL chambers
     if Nchb == 11:
@@ -448,7 +480,7 @@ def exporter(eff, pool, mult, Nchb):
         exporter = csv.writer(exportfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         exporter.writerow(['chamber', 'type', 'efficiency', 'pool of tracks', 'average_multiplicity'])
         
-        for i in range(2, len(mult_tot)):
+        for i in range(2, Nchb+1):
             if i in range(2, 4):
                 exporter.writerow([i , 'Small MM', eff[i], pool[i], mult[i]])
             elif i in range(4, 7):

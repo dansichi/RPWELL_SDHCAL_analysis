@@ -31,12 +31,12 @@ def eff(mode, Nchb=8, qc=False):
         print('Running efficiency estimation for hits in CaloEvents.')
         dataId = 'caloId'
         df_MIPs = pd.DataFrame(columns = ['eventId', 'chbid', 'xpos', 'ypos', 'dt', 'digit', 'chipid', 'hardid',
-        'nhits', 'caloId'])
+        'nhits', 'caloId', 'zx0', 'zx1', 'zy0', 'zy1'])
     else:
         print('Running efficiency estimation for hits which are time-correlated with the trigger.')
         dataId = 'eventId'
         df_MIPs = pd.DataFrame(columns = ['eventId', 'chbid', 'xpos', 'ypos', 'dt', 'digit', 'chipid', 'hardid',
-        'nhits'])
+        'nhits', 'zx0', 'zx1', 'zy0', 'zy1'])
 
     if Nchb == 7:
         runList = pd.read_csv('data/eScan8Layers.csv')
@@ -58,6 +58,13 @@ def eff(mode, Nchb=8, qc=False):
         excluded_runs = []
 
     for i in tqdm(range(l)):
+        
+        # # debug
+
+        # if i > 0:
+        #     print('DEBUG MODE!!! ONLY 1 RUNS!!!')
+        #     break
+
         run = runList.iloc[i]
 
         if format(run["time"], '04d') not in excluded_runs:
@@ -90,10 +97,10 @@ def eff(mode, Nchb=8, qc=False):
                 (effective_MIPs, hresx, hresy, edge) = dh.isMIP(df_batch_eff, mode, Nchb=Nchb, res=2)
 
                 print ('{:.2%} of events are valid MIPs'.format(len(effective_MIPs)/nEvents))
-                df_batch = df_batch[df_batch[dataId].isin(effective_MIPs)]
+                df_batch_eff = df_batch_eff[df_batch_eff[dataId].isin(effective_MIPs)]
                 
-                df_batch[dataId] = df_batch[dataId].agg(lambda x: '{}_{}'.format(runId, x))
-                df_MIPs = pd.concat([df_MIPs,df_batch], axis=0)
+                df_batch_eff[dataId] = df_batch_eff[dataId].agg(lambda x: '{}_{}'.format(runId, x))
+                df_MIPs = pd.concat([df_MIPs,df_batch_eff], axis=0)
 
                 # for selection quality control purpose
                 if qc:
@@ -106,7 +113,7 @@ def eff(mode, Nchb=8, qc=False):
 
     eff_tot, pool_tot, mult_tot = dh.efficiency_estimation(df_MIPs, mode, Nchb)
 
-    dh.exporter(eff_tot, pool_tot, mult_tot, Nchb)
+    dh.exporter(eff_tot, pool_tot, mult_tot, mode, Nchb)
 
     return eff_tot, pool_tot, mult_tot
 
@@ -192,7 +199,7 @@ def plot_eff(eff_tot, pool_tot, mode, Nchb=8):
     # 48x48 cm^2 RPWELL chambers
     if Nchb == 11:
         dict_RPWELL = {7: 'ASU 61', 8: 'ASU 60', 9: 'ASU 51', 10: 'ASU 57', 11: 'ASU 52'}
-    elif Nchb == 8:
+    elif Nchb in [7,8]:
         dict_RPWELL = {7: 'ASU 61', 8: 'ASU 51'}
     
     # saving dato to csv
