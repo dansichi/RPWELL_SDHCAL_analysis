@@ -299,7 +299,7 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     df_mip = df_mip[~df_mip[dataId].isin(no_mip)]
     
     # UPDATE 06-01-2020: keep only tracks with least Nchb-1 MIP-like layers
-    df_mip_evt = df_mip.groupby(dataId).count()
+    df_mip_evt = df_mip.groupby(dataId).apply(lambda x: len(set(x))) 
     valid_trks = df_mip_evt[df_mip_evt['chbid'] > Nchb-2].index.tolist()
     df_mip = df_mip[df_mip[dataId].isin(valid_trks)]    
 
@@ -316,6 +316,7 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
                     'zy': tofit_xyz[['chbid', 'ypos']].apply(tuple, axis=1)})
     tofit_xyz[['zx', 'zy']] = fit.applymap(lambda p: np.polyfit(p[0], p[1], 1))
     df_batch[['zx', 'zy']] = tofit_xyz[['zx', 'zy']]
+
     # Calculating residuals
     residuals = pd.DataFrame({'x': tofit_xyz[['xpos', 'zx', 'chbid']].apply(tuple, axis=1),
                               'y': tofit_xyz[['ypos', 'zy', 'chbid']].apply(tuple, axis=1)})
@@ -392,8 +393,12 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
         # print("y: {}".format(df_mips.ypos.iloc[i]))
         cl = cluster(df_mips.xpos.iloc[i], df_mips.ypos.iloc[i]) 
         # cl.seeding(p, 5)
-        df_mips['cl_members'].iloc[i] = cl.cluster(p, 2)
-    print( df_mips['cl_members'])
+        df_mips['cl_members'].iloc[i] = cl.cluster(p, 3)
+    # print( df_mips['cl_members'])
+    
+    print('Exporting empty mip-clusters')
+    # df_mips[df_mips.cl_members == []].to_csv('empty_clusters_{}.csv'.format(datetime.now().strftime('%Y%m%d_%H%M')))
+    df_mips.to_csv('mips_with_clusters_{}.csv'.format(datetime.now().strftime('%Y%m%d_%H%M')))
 
     mip_members = df_mips.groupby(dataId).agg(lambda x: x.tolist())['chbid']
     chbl = list(range(1,Nchb+1))

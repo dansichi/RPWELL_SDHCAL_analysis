@@ -46,7 +46,7 @@ class cluster:
         if len(seed) == 0:
             print("no seed found!")
             return []
-        for i in range(self._points.shape[1]):
+        for i in range(self._points.shape[0]):
             if i == seed[0]:
                 members.append(self._points[i])
             if self.isLinked(seed[0],i):
