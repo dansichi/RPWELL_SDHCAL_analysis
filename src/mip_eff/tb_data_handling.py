@@ -291,7 +291,7 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     
     # finding layers with non-adjacent two hits
     no_mip = df_mip[df_mip.nhits == 2]
-    no_mip['pos'] = list(zip(no_mip.xpos, no_mip.ypos))
+    no_mip.loc[:, 'pos'] = list(zip(no_mip.xpos, no_mip.ypos))
     # no_mip = no_mip[dataId][no_mip.pos.apply(lambda x:np.sqrt((x[0][0]-x[0][1])**2 +
     #                                                 (x[1][0]-x[1][1])**2) > 1)].tolist()
     no_mip = no_mip[dataId][no_mip.pos.apply(lambda x:np.sqrt((x[0][0]-x[0][1])**2 +
@@ -299,16 +299,16 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     df_mip = df_mip[~df_mip[dataId].isin(no_mip)]
     
     # UPDATE 06-01-2020: keep only tracks with least Nchb-1 MIP-like layers
-    df_mip_evt = df_mip.groupby(dataId).apply(lambda x: len(set(x))) 
+    df_mip_evt = df_mip.groupby(dataId).agg(lambda x: len(set(x))) 
     valid_trks = df_mip_evt[df_mip_evt['chbid'] > Nchb-2].index.tolist()
     df_mip = df_mip[df_mip[dataId].isin(valid_trks)]    
-
+    print('{:.2%} valid tracks'.format(len(valid_trks)/len(df_batch.index.tolist())))
     # preparing for fit
     tofit = df_mip.groupby(dataId).agg(lambda x: x.tolist())[['chbid', 'xpos', 'ypos', 'nhits']]
-    tofit_xyz = tofit[['xpos', 'ypos']].applymap(lambda x: np.concatenate(np.array(x)).ravel())
+    tofit_xyz = tofit.loc[:, ['xpos', 'ypos']].applymap(lambda x: np.concatenate(np.array(x)).ravel())
     tofit_z = pd.DataFrame({'z':list(zip(tofit.chbid, tofit.nhits)), dataId: tofit.index.tolist()})
     tofit_z.set_index(dataId, inplace=True)
-    tofit_xyz['chbid'] = tofit_z['z'].agg(lambda x: np.concatenate(np.array([[x[0][i]]*x[1][i]\
+    tofit_xyz.loc[:, 'chbid'] = tofit_z['z'].agg(lambda x: np.concatenate(np.array([[x[0][i]]*x[1][i]\
                                          for i in range(len(x[0]))])).ravel())
     
     # Fitting track
@@ -320,17 +320,19 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     # Calculating residuals
     residuals = pd.DataFrame({'x': tofit_xyz[['xpos', 'zx', 'chbid']].apply(tuple, axis=1),
                               'y': tofit_xyz[['ypos', 'zy', 'chbid']].apply(tuple, axis=1)})
-    residuals['xres'] = residuals.x.agg(lambda x: np.abs(x[0] - (x[1][0]*x[2] + x[1][1])))
-    residuals['yres'] = residuals.y.agg(lambda x: np.abs(x[0] - (x[1][0]*x[2] + x[1][1])))
+    residuals.loc[:, 'xres'] = residuals.x.agg(lambda x: np.abs(x[0] - (x[1][0]*x[2] + x[1][1])))
+    residuals.loc[:, 'yres'] = residuals.y.agg(lambda x: np.abs(x[0] - (x[1][0]*x[2] + x[1][1])))
     
     # A MIP should have residual < 1 
     tofit_xyz['inbound'] = residuals[['xres', 'yres']].apply(tuple, axis=1).\
                            agg(lambda x: sum(x[0] > res)+sum(x[1] > res) == 0 )
 
-    df_batch['zx0'] = ""
-    df_batch['zy0'] = ""
-    df_batch['zx1'] = ""
-    df_batch['zy1'] = ""
+    print('{:.2%} inbound tracks out of'.format(len(tofit_xyz[tofit_xyz.inbound].index.tolist())/len(df_batch.index.tolist()), len(df_batch.index.tolist())))
+
+    df_batch.loc[:, 'zx0'] = ""
+    df_batch.loc[:, 'zy0'] = ""
+    df_batch.loc[:, 'zx1'] = ""
+    df_batch.loc[:, 'zy1'] = ""
 
     # saving the fit parameters
     for i in tofit_xyz.index.tolist():
@@ -393,7 +395,7 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
         # print("y: {}".format(df_mips.ypos.iloc[i]))
         cl = cluster(df_mips.xpos.iloc[i], df_mips.ypos.iloc[i]) 
         # cl.seeding(p, 5)
-        df_mips['cl_members'].iloc[i] = cl.cluster(p, 3)
+        df_mips['cl_members'].iloc[i] = cl.cluster(p, 2)
     # print( df_mips['cl_members'])
     
     print('Exporting empty mip-clusters')
