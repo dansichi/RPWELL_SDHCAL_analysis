@@ -103,7 +103,7 @@ def eff(mode, Nchb=8, qc=False):
                 print ('{:.2%} of events are valid MIPs'.format(len(effective_MIPs)/nEvents))
                 df_batch_eff = df_batch_eff[df_batch_eff[dataId].isin(effective_MIPs)]
                 
-                df_batch_eff[dataId] = df_batch_eff[dataId].agg(lambda x: '{}_{}'.format(runId, x))
+                # df_batch_eff[dataId] = df_batch_eff[dataId].agg(lambda x: '{}_{}'.format(runId, x))
                 df_MIPs = pd.concat([df_MIPs,df_batch_eff], axis=0)
 
                 # for selection quality control purpose

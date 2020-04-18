@@ -303,7 +303,7 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     df_mip_evt = df_mip.groupby(dataId).agg(lambda x: len(set(x))) 
     valid_trks = df_mip_evt[df_mip_evt['chbid'] > Nchb-2].index.tolist()
     df_mip = df_mip[df_mip[dataId].isin(valid_trks)]    
-    print('{:.2%} valid tracks'.format(len(valid_trks)/len(df_batch.index.tolist())))
+    print('{:.2%} valid tracks'.format(len(valid_trks)/len(df_batch[dataId].unique().tolist())))
     # preparing for fit
     tofit = df_mip.groupby(dataId).agg(lambda x: x.tolist())[['chbid', 'xpos', 'ypos', 'nhits']]
     tofit_xyz = tofit.loc[:, ['xpos', 'ypos']].applymap(lambda x: np.concatenate(np.array(x)).ravel())
@@ -316,7 +316,6 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     fit = pd.DataFrame({'zx': tofit_xyz[['chbid', 'xpos']].apply(tuple, axis=1),
                     'zy': tofit_xyz[['chbid', 'ypos']].apply(tuple, axis=1)})
     tofit_xyz[['zx', 'zy']] = fit.applymap(lambda p: np.polyfit(p[0], p[1], 1))
-    df_batch[['zx', 'zy']] = tofit_xyz[['zx', 'zy']]
 
     # Calculating residuals
     residuals = pd.DataFrame({'x': tofit_xyz[['xpos', 'zx', 'chbid']].apply(tuple, axis=1),
@@ -328,7 +327,7 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     tofit_xyz['inbound'] = residuals[['xres', 'yres']].apply(tuple, axis=1).\
                            agg(lambda x: sum(x[0] > res)+sum(x[1] > res) == 0 )
 
-    print('{:.2%} inbound tracks out of'.format(len(tofit_xyz[tofit_xyz.inbound].index.tolist())/len(df_batch.index.tolist()), len(df_batch.index.tolist())))
+    print('{:.2%} inbound tracks out of clean events'.format(len(tofit_xyz[tofit_xyz.inbound].index.tolist())/len(df_batch[dataId].unique().tolist()), len(df_batch.index.tolist())))
 
     df_batch.loc[:, 'zx0'] = ""
     df_batch.loc[:, 'zy0'] = ""
@@ -399,8 +398,9 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
         df_mips['cl_members'].iloc[i] = cl.cluster(p, 2)
     # print( df_mips['cl_members'])
     
-    print('Exporting empty mip-clusters')
-    # df_mips[df_mips.cl_members == []].to_csv('empty_clusters_{}.csv'.format(datetime.now().strftime('%Y%m%d_%H%M')))
+    # print('Exporting empty mip-clusters')
+    # # df_mips[df_mips.cl_members == []].to_csv('empty_clusters_{}.csv'.format(datetime.now().strftime('%Y%m%d_%H%M')))
+    # DEBUG exporting mips with clusters information
     df_mips.to_csv('mips_with_clusters_{}.csv'.format(datetime.now().strftime('%Y%m%d_%H%M')))
 
     mip_members = df_mips.groupby(dataId).agg(lambda x: x.tolist())['chbid']
