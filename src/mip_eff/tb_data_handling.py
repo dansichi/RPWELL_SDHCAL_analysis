@@ -294,9 +294,10 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     no_mip.loc[:, 'pos'] = list(zip(no_mip.xpos, no_mip.ypos))
     # no_mip = no_mip[dataId][no_mip.pos.apply(lambda x:np.sqrt((x[0][0]-x[0][1])**2 +
     #                                                 (x[1][0]-x[1][1])**2) > 1)].tolist()
-    no_mip = no_mip[dataId][no_mip.pos.apply(lambda x:np.sqrt((x[0][0]-x[0][1])**2 +
-                                                    (x[1][0]-x[1][1])**2) > 1)].tolist()
-    df_mip = df_mip[~df_mip[dataId].isin(no_mip)]
+    no_mip = no_mip[[dataId, 'chbid']][no_mip.pos.apply(lambda x:np.sqrt((x[0][0]-x[0][1])**2 +
+                                                (x[1][0]-x[1][1])**2) > 2)].agg(tuple, axis=1)
+    
+    df_mip = df_mip[~df_mip.index.isin(no_mip.index.tolist())]
     
     # UPDATE 06-01-2020: keep only tracks with least Nchb-1 MIP-like layers
     df_mip_evt = df_mip.groupby(dataId).agg(lambda x: len(set(x))) 

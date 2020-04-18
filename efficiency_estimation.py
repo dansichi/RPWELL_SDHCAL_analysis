@@ -84,8 +84,12 @@ def eff(mode, Nchb=8, qc=False):
                 print('Zero nEvents after cleaning!')
                 continue
                 
-            eff_events = df_batch.groupby(dataId)['chbid'].agg(lambda x: len(x) > Nchb-2)
-            eff_events = eff_events[eff_events].index.tolist()
+            # eff_events = df_batch.groupby(dataId)['chbid'].agg(lambda x: len(x) > Nchb-2)
+            # eff_events = eff_events[eff_events].index.tolist()
+            
+            # Keep only effective events with more than Nchb-2 layers
+            eff_events = df_batch.groupby(dataId).agg(lambda x: len(set(x))) 
+            eff_events = eff_events[eff_events['chbid'] > Nchb-2].index.tolist()
             df_batch_eff = df_batch[df_batch[dataId].isin(eff_events)]
             
             # for selection quality control purpose
