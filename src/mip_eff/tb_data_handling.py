@@ -153,9 +153,9 @@ def read_nov18run(run, offset={'x': 18, 'y': 17}, Nchb=8):
         df_quiet : Pandas DataFrame
     
     """
-    file1 = open("path.txt","r")
-    HOME = file1.read()
-
+    # file1 = open("path.txt","r")
+    # HOME = file1.read()
+    HOME = '/Users/dansh/cernbox/TB_nov18/Rootfiles/simple/'
     day = format(run["day"], '08d')
     time = format(run["time"], '04d')
     index = run["index"]
@@ -437,6 +437,9 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
     resultsfile = uproot.recreate('./results/multiplicity_{}layers_{}_{}.root'\
                            .format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')),
                            compression=uproot.ZLIB(4))
+    
+    file = uproot.recreate('./results/pad_multiplicity_{}layers_{}_{}.root'.format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')), compression=uproot.ZLIB(4))
+
     for chb in range(2, Nchb+1):
         s = chbl[:]
         s.remove(chb)
@@ -451,7 +454,9 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
 
         # multiplicity in chamber for relevant tracks
         mult_in_track = pool_tracks['cl_members'][(pool_tracks.chbid == chb)].agg(lambda x: len(x))
-
+        
+        mult_in_track = mult_in_track[mult_in_track > 0]
+        
         resultsfile['hmult_chb{}'.format(chb)] = np.histogram(mult_in_track, bins=range(max(mult_in_track)+2))
         neff_tracks = mult_in_track.shape[0]
 
@@ -467,7 +472,10 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
         
         eff[chb] = neff_tracks/pool_tracks[dataId].unique().shape[0]
         pool[chb] = pool_tracks[dataId].unique().shape[0]
-        
+    
+        bins = mult_in_track.max()
+        file["mult_chb{}".format(chb)] = np.histogram(mult_in_track, bins, range=(0, bins))
+
     return eff, pool, mult
 
 
