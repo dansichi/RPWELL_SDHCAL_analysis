@@ -1,5 +1,10 @@
 {
     "files.associations": {
         "DigitisationScreamTunedThr.C": "cpp"
-    }
+    },
+    "cSpell.words": [
+        "hhits",
+        "hnhits",
+        "nhits"
+    ]
 }

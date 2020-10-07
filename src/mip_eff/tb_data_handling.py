@@ -169,6 +169,25 @@ def read_nov18run(run, offset={'x': 18, 'y': 17}, Nchb=8):
 
     # correct offset
     print('fixing off set.')
+    toflip = ['12112018-0335-1',
+              '12112018-0431-1',
+              '12112018-0204-2',
+              '12112018-0221-1',
+              '12112018-0223-1',
+              '12112018-0230-1',
+              '12112018-0241-1',
+              '12112018-0253-1',
+              '12112018-0058-1',
+              '12112018-0108-1',
+              '12112018-0118-1',
+              '11112018-2248-1',
+              '11112018-2309-1',
+              '12112018-0729-1',
+              '12112018-0703-1',
+              '12112018-0715-1',
+              '12112018-0718-1']
+    if runId in toflip:
+        df.loc[df.chbid < 4, 'xpos'] = 48 - df.loc[df.chbid < 4, 'xpos']
     fixoffset(df, offset['x'], offset['y'])
     
     # Filter noisy channels
@@ -178,7 +197,7 @@ def read_nov18run(run, offset={'x': 18, 'y': 17}, Nchb=8):
     return df_quiet
 
 
-def cleaning(df, mode, time_wins=[15]):
+def cleaning(df, mode, time_wins=[15], verbose=True):
     """Basic event selection.    
     Based on the following criteria:
         - stable events.
@@ -203,15 +222,15 @@ def cleaning(df, mode, time_wins=[15]):
         stable_events = stable_events[stable_events].index.tolist()
 
         df_stable = df[df.eventId.isin(stable_events)]
-        print("run {}: {:%} stable out of {} events.".format(stable_events[0][:15],
+        if verbose: print("run {}: {:%} stable out of {} events.".format(stable_events[0][:15],
                                                         len(stable_events)/len(df.groupby("eventId").count()),
                                                         len(df.groupby("eventId").count())))
         
         if mode == "calo":
-            df_stable['id'] = df_stable[['eventId', 'dt']].apply(tuple, axis=1)
+            df_stable.loc[:, 'id'] = df_stable[['eventId', 'dt']].apply(tuple, axis=1)
 
             # Creating Calo-Event ID to destinguish from the eventId
-            df_stable['caloId'] = df_stable.id.agg(lambda x: ((x[1]-1 in time_wins[x[0]])  * '{}_{}'.format(x[0], x[1]-1)) or 
+            df_stable.loc[:, 'caloId'] = df_stable.id.agg(lambda x: ((x[1]-1 in time_wins[x[0]])  * '{}_{}'.format(x[0], x[1]-1)) or 
                                                             ((x[1] in time_wins[x[0]])  * '{}_{}'.format(x[0], x[1])) or 
                                                             ((x[1]+1 in time_wins[x[0]]) * '{}_{}'.format(x[0], x[1]+1)) or
                                                             ((x[1]+2 in time_wins[x[0]]) * '{}_{}'.format(x[0], x[1]+2)))
@@ -225,7 +244,7 @@ def cleaning(df, mode, time_wins=[15]):
             dataId = 'eventId'
 
         nEvents = len(df_dt[dataId].unique())
-        print('{} events with hits in dt'.format(nEvents))
+        if verbose: print('{} events with hits in dt'.format(nEvents))
     
     else:
         df_dt = df.copy()
@@ -235,11 +254,11 @@ def cleaning(df, mode, time_wins=[15]):
     # Select only events some hits in the first layer
     nhits_layer = df_dt.groupby([dataId, 'chbid']).count()
     nhits_layer = nhits_layer.reset_index(level=1)
-    print ('{:.2%} of events have some hits in the first layer'.format(nhits_layer[nhits_layer.chbid == 1].shape[0]/nEvents))
+    if verbose: print ('{:.2%} of events have some hits in the first layer'.format(nhits_layer[nhits_layer.chbid == 1].shape[0]/nEvents))
     
     # Select only events with 1 hit  in the first layer
     singleHit_layer1 = nhits_layer[(nhits_layer.chbid == 1) & (nhits_layer.xpos == 1)].index.tolist()
-    print ('{:.2%} of events have a single hit in the first layer'.format(len(singleHit_layer1)/nEvents))
+    if verbose: print ('{:.2%} of events have a single hit in the first layer'.format(len(singleHit_layer1)/nEvents))
     
     # Array of events with 2 hits in the first layer
     doubleHit_layer1 = nhits_layer[(nhits_layer.chbid == 1) & (nhits_layer.xpos == 2)].index.tolist()
@@ -250,21 +269,17 @@ def cleaning(df, mode, time_wins=[15]):
     adj_2hits_layer1 = df_doubleHit_layer1[df_doubleHit_layer1.pos.\
                                            apply(lambda x:np.sqrt((x[0][0]-x[0][1])**2 +
                                                                   (x[1][0]-x[1][1])**2) <= 1)].index.tolist()
-    print ('{:.2%} of events have a single or 2 adjacent hits in the first layer'.format((len(singleHit_layer1)+
+    if verbose: print ('{:.2%} of events have a single or 2 adjacent hits in the first layer'.format((len(singleHit_layer1)+
                                                                            len(adj_2hits_layer1))/nEvents))
     
     
     # pandas DataFrame containing the summary of number of hits per event, per chamber
-    df_batch = df_dt[(df_dt[dataId].isin(doubleHit_layer1))].groupby([dataId, 'chbid']).agg(lambda x: x.tolist()).reset_index()
-    # if df_batch.shape[0] == 0:
-    #     return df_batch 0
-    df_batch = df_batch[df_batch[dataId].isin(singleHit_layer1 + adj_2hits_layer1)]
-    df_batch['nhits'] = df_batch.applymap(lambda x: len(str(x).split(',')))['xpos'] # xpos is selected just to extract the number of hits
-
-    return df_batch, nEvents
+    df_batch = df_dt[(df_dt[dataId].isin(singleHit_layer1 + adj_2hits_layer1))].groupby([dataId, 'chbid']).agg(lambda x: x.tolist()).reset_index()
+    df_batch['nhits'] = df_batch.xpos.agg(lambda x: len(x)) 
+    return df_batch, df_batch.shape[0]
 
 
-def isMIP(df_batch, mode, Nchb=8, res=1):
+def isMIP(df_batch, mode, Nchb=8, res=1, verbose=True, maxnhits=2):
     """Returns the list of MIP events using strict selection for detection efficiency estimation
     Parameters:
     -----------
@@ -287,23 +302,30 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
         dataId = 'eventId'
 
     # up to two adjacent hits in each layer
-    df_mip = df_batch[df_batch.nhits <= 2]
+    # df_mip = df_batch[df_batch.nhits <= 2]
+    df_mip = df_batch[df_batch.nhits <= maxnhits]
+
     
     # finding layers with non-adjacent two hits
-    no_mip = df_mip[df_mip.nhits == 2]
-    no_mip.loc[:, 'pos'] = list(zip(no_mip.xpos, no_mip.ypos))
+    # no_mip = df_mip[df_mip.nhits == 2]
+    no_mip = df_mip[df_mip.nhits > 1]
+
+    no_mip.loc[:, 'pos'] = no_mip[['xpos', 'ypos']].apply(tuple, axis=1).apply(lambda x: np.array([np.array(x[0]),np.array(x[1])]).transpose())
+    # no_mip.loc[:, 'pos'] = no_mip['pos'].agg(lambda x: np.array(x).transpose())
     # no_mip = no_mip[dataId][no_mip.pos.apply(lambda x:np.sqrt((x[0][0]-x[0][1])**2 +
     #                                                 (x[1][0]-x[1][1])**2) > 1)].tolist()
-    no_mip = no_mip[[dataId, 'chbid']][no_mip.pos.apply(lambda x:np.sqrt((x[0][0]-x[0][1])**2 +
-                                                (x[1][0]-x[1][1])**2) > 2)].agg(tuple, axis=1)
+
+    # CORRECTION 15-09-2020 : the distance calculation was wrong
+    no_mip = no_mip[[dataId, 'chbid']][no_mip.pos.apply(lambda x: cdist([x[0]], [x[1]], 'euclidean')[0][0] > 2)].agg(tuple, axis=1)
     
     df_mip = df_mip[~df_mip.index.isin(no_mip.index.tolist())]
     
     # UPDATE 06-01-2020: keep only tracks with least Nchb-1 MIP-like layers
-    df_mip_evt = df_mip.groupby(dataId).agg(lambda x: len(set(x))) 
+    df_mip_evt = df_mip.groupby(dataId).agg(lambda x: len(set(x)))
     valid_trks = df_mip_evt[df_mip_evt['chbid'] > Nchb-2].index.tolist()
     df_mip = df_mip[df_mip[dataId].isin(valid_trks)]    
-    print('{:.2%} valid tracks'.format(len(valid_trks)/len(df_batch[dataId].unique().tolist())))
+    if verbose: print('{:.2%} valid tracks'.format(len(valid_trks)/len(df_batch[dataId].unique().tolist())))
+    
     # preparing for fit
     tofit = df_mip.groupby(dataId).agg(lambda x: x.tolist())[['chbid', 'xpos', 'ypos', 'nhits']]
     tofit_xyz = tofit.loc[:, ['xpos', 'ypos']].applymap(lambda x: np.concatenate(np.array(x)).ravel())
@@ -327,7 +349,7 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     tofit_xyz['inbound'] = residuals[['xres', 'yres']].apply(tuple, axis=1).\
                            agg(lambda x: sum(x[0] > res)+sum(x[1] > res) == 0 )
 
-    print('{:.2%} inbound tracks out of clean events'.format(len(tofit_xyz[tofit_xyz.inbound].index.tolist())/len(df_batch[dataId].unique().tolist()), len(df_batch.index.tolist())))
+    if verbose: print('{:.2%} inbound tracks out of clean events'.format(len(tofit_xyz[tofit_xyz.inbound].index.tolist())/len(df_batch[dataId].unique().tolist()), len(df_batch.index.tolist())))
 
     df_batch.loc[:, 'zx0'] = ""
     df_batch.loc[:, 'zy0'] = ""
@@ -361,7 +383,7 @@ def isMIP(df_batch, mode, Nchb=8, res=1):
     return (tofit_xyz[tofit_xyz.inbound].index.tolist(), hresx, hresy, edgey)
 
 
-def efficiency_estimation(df_mips, mode, Nchb=8):
+def efficiency_estimation(df_mips, mode, Nchb=8, toPrint=True, verbose=True):
     """MIP detection estimation for 
     Parameters:
     -----------
@@ -387,21 +409,27 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
     mult = {}
     df_mips['cl_members'] = ""
     # Filtering the hits in each layer to contain only relevant cluster hits
-    for i in range(df_mips.shape[0]):
+    for i in tqdm(range(df_mips.shape[0])):
+        
         p = [df_mips.zx0.iloc[i]*df_mips.chbid.iloc[i] + df_mips.zx1.iloc[i],
             df_mips.zy0.iloc[i]*df_mips.chbid.iloc[i] + df_mips.zy1.iloc[i]]
+
+        if (df_mips.zx0.iloc[i] == "") or (df_mips.zx1.iloc[i] == ""):
+            df_mips['cl_members'].iloc[i] == []
+            continue
         # print('chamber: {}'.format(df_mips.chbid.iloc[i]))
         # print("x: {}".format(df_mips.xpos.iloc[i]))
         # print("y: {}".format(df_mips.ypos.iloc[i]))
         cl = cluster(df_mips.xpos.iloc[i], df_mips.ypos.iloc[i]) 
         # cl.seeding(p, 5)
-        df_mips['cl_members'].iloc[i] = cl.cluster(p, 2)
+        
+        df_mips['cl_members'].iloc[i] = cl.cluster(p, radius=2)
     # print( df_mips['cl_members'])
     
     # print('Exporting empty mip-clusters')
     # # df_mips[df_mips.cl_members == []].to_csv('empty_clusters_{}.csv'.format(datetime.now().strftime('%Y%m%d_%H%M')))
     # DEBUG exporting mips with clusters information
-    df_mips.to_csv('mips_with_clusters_{}.csv'.format(datetime.now().strftime('%Y%m%d_%H%M')))
+    # df_mips.to_csv('mips_with_clusters_{}.csv'.format(datetime.now().strftime('%Y%m%d_%H%M')))
 
     mip_members = df_mips.groupby(dataId).agg(lambda x: x.tolist())['chbid']
     chbl = list(range(1,Nchb+1))
@@ -427,18 +455,18 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
 
     # Number of hits in each chamber
     # mult_in_track = eff_tracks.agg(lambda x: Counter(x))
-    
-    if not os.path.isdir('./figures'):
-        os.mkdir("./figures")
+    if toPrint:
+        if not os.path.isdir('./figures'):
+            os.mkdir("./figures")
 
-    if not os.path.isdir('./results'):
-        os.mkdir("./results")
+        if not os.path.isdir('./results'):
+            os.mkdir("./results")
 
-    resultsfile = uproot.recreate('./results/multiplicity_{}layers_{}_{}.root'\
-                           .format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')),
-                           compression=uproot.ZLIB(4))
-    
-    file = uproot.recreate('./results/pad_multiplicity_{}layers_{}_{}.root'.format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')), compression=uproot.ZLIB(4))
+        resultsfile = uproot.recreate('./results/multiplicity_{}layers_{}_{}.root'\
+                            .format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')),
+                            compression=uproot.ZLIB(4))
+        
+        file = uproot.recreate('./results/pad_multiplicity_{}layers_{}_{}.root'.format(Nchb, mode, datetime.now().strftime('%Y%m%d_%H%M')), compression=uproot.ZLIB(4))
 
     for chb in range(2, Nchb+1):
         s = chbl[:]
@@ -455,26 +483,36 @@ def efficiency_estimation(df_mips, mode, Nchb=8):
         # multiplicity in chamber for relevant tracks
         mult_in_track = pool_tracks['cl_members'][(pool_tracks.chbid == chb)].agg(lambda x: len(x))
         
+        # DEBUG:
+        pool_tracks.to_pickle('pool_trackschb{}_{}.pkl'.format(chb, datetime.now().strftime('%Y%m%d_%H%M')))
+        print('saving pool_trackschb{}_{}.pkl'.format(chb, datetime.now().strftime('%Y%m%d_%H%M')))
+
+
+        ###
+
         mult_in_track = mult_in_track[mult_in_track > 0]
         
-        resultsfile['hmult_chb{}'.format(chb)] = np.histogram(mult_in_track, bins=range(max(mult_in_track)+2))
-        neff_tracks = mult_in_track.shape[0]
+        
 
-        fig = plt.figure()
-        ValList, bins, _ = plt.hist(mult_in_track)
-        plt.title("chb {}: mult mean = {}; mult std={}".format(chb, mult_in_track.mean(), mult_in_track.std()))
-        plt.savefig('figures/hist_mip_mult_{}layers_chb{}_{}_{}.png'.format(Nchb, chb, mode, datetime.now().strftime('%Y%m%d_%H%M')))
-        del(fig)
+        if toPrint: resultsfile['hmult_chb{}'.format(chb)] = np.histogram(mult_in_track, bins=range(max(mult_in_track)+2))
+        neff_tracks = mult_in_track.shape[0]
+        if toPrint:
+            fig = plt.figure()
+            ValList, bins, _ = plt.hist(mult_in_track)
+            plt.title("chb {}: mult mean = {}; mult std={}".format(chb, mult_in_track.mean(), mult_in_track.std()))
+            plt.savefig('figures/hist_mip_mult_{}layers_chb{}_{}_{}.png'.format(Nchb, chb, mode, datetime.now().strftime('%Y%m%d_%H%M')))
+            del(fig)
 
         
         mult[chb] = mult_in_track.mean()
-        print("chb {}: mult mean = {}; mult std={}".format(chb, mult_in_track.mean(), mult_in_track.std()))
+        if verbose: print("chb {}: mult mean = {}; mult std={}".format(chb, mult_in_track.mean(), mult_in_track.std()))
         
         eff[chb] = neff_tracks/pool_tracks[dataId].unique().shape[0]
+
         pool[chb] = pool_tracks[dataId].unique().shape[0]
     
         bins = mult_in_track.max()
-        file["mult_chb{}".format(chb)] = np.histogram(mult_in_track, bins, range=(0, bins))
+        if toPrint: file["mult_chb{}".format(chb)] = np.histogram(mult_in_track, bins, range=(0, bins))
 
     return eff, pool, mult
 

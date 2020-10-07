@@ -1,3 +1,5 @@
+import uproot
+from itertools import chain, product
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
@@ -122,11 +124,11 @@ def eff(mode, Nchb=8, qc=False):
     return eff_tot, pool_tot, mult_tot
 
 
-def eff_MC(energy, mipeff, particle='pions', Nchb=8):
+def eff_MC(energy, mipeff, sig, particle='pions', Nchb=8):
     """ Estimates the MIP detection efficiency for CaloEvents data.
     Parameters:
     -----------
-        energy  :   beam energy in GeV (1-6).
+        energy  :   beam energy in GeV (2-6).
         mipeff  :   simulation mip threshold.
         particle:   beam's type of particle: 'pions' or 'electrons'. Default: 'pions'.
         mode    :   'dt' or 'calo' for trigger-time correlated hits or CaloEvents, respectively.
@@ -141,30 +143,50 @@ def eff_MC(energy, mipeff, particle='pions', Nchb=8):
                     for the efficiency estimation. The chamber numbers serves as keys.
     """
 
-    filename, digit = mc.MAX_FILES[particle][energy][mipeff]
+    # filename, digit = mc.MAX_FILES[particle][energy][mipeff]
+    MC_HOME = '/Users/dansh/Projects/g4_mpgd_sdhcal/uMSDHCAL/rootfiles/10chb_high_statistics/digitized/'
+    prefix = 'digitized_MeasuredEff_0sig_8chbs_uMSDHCAL_ArCO2_2cm'
+    suffix = '0T_10k_FTFP_BERT.root'
+
+    filename = prefix + '_pi_{}_'.format(energy) + suffix
     dataId = 'eventId'
-  
-    # Define list of excluded runs
-    df = mc.readGeantFile(filename, digit)
+    filename = 'digitized_MeasuredEff_20200923_0.01sig_8chbs_high_statistics_100k_10chbs_5GeV_pi_QGSP_BERT.root'
+    # filename = 'digitized_noMult_lowMMHighRP_{}sig_8chbs_high_statistics_1M_10chbs_{}_pi.root'.format(sig, energy)
+    print("efficiency estimation for: " + filename)
+    # read file to dataframe
+    file = uproot.open(MC_HOME + filename)
+    tree = file['tvec']
+    df= (pd.DataFrame(list(chain(*[list(product([x],[y])) \
+                        for x, y in zip(tree.array("eventId"),
+                                        tree.array("layer"))])),
+                                        columns= ['eventId',"chbid"]))
+    df['xpos'] = tree.array('xpos').flatten()
+    df['ypos'] = tree.array('ypos').flatten()
+    # df['Thr'] = tree.array('Thr').flatten()
+    df['digit'] = tree.array('digit').flatten()
+    df['pad'] = df[['chbid', 'xpos', 'ypos']].agg(tuple, axis=1)
 
     df_batch, nEvents = dh.cleaning(df, 'MC')
-
+    print('{} clean events'.format(len(df_batch[dataId].unique())))
     if nEvents == 0:
         raise ValueError('nEvent is zero!')
         return
         
-    eff_events = df_batch.groupby(dataId)['chbid'].agg(lambda x: len(x) > Nchb-2)
+    eff_events = df_batch.groupby(dataId)['chbid'].agg(lambda x: len(set(x)) > Nchb-2)
     eff_events = eff_events[eff_events].index.tolist()
     df_batch_eff = df_batch[df_batch[dataId].isin(eff_events)]
     
     if df_batch_eff.shape[0] > 0:
         (effective_MIPs, hresx, hresy, edge) = dh.isMIP(df_batch_eff, mode, Nchb=Nchb, res=2)
 
-        print ('{:.2%} of events are valid MIPs'.format(len(effective_MIPs)/nEvents))
-        df_batch = df_batch[df_batch[dataId].isin(effective_MIPs)]
-        df_MIPs = df_batch
 
+        print ('{:.2%} of events are valid MIPs'.format(len(effective_MIPs)/len(df_batch[dataId].unique().tolist())))
+        df_batch_eff = df_batch_eff[df_batch_eff[dataId].isin(effective_MIPs)]
+        df_MIPs = df_batch_eff
+
+    
     eff_tot, pool_tot, mult_tot = dh.efficiency_estimation(df_MIPs, 'MC', Nchb)
+    df_MIPs.to_pickle(MC_HOME + 'df_MIPs_'+ filename[:-5] + '.pkl')
     return eff_tot, pool_tot, mult_tot
 
 
@@ -190,13 +212,13 @@ def plot_eff(eff_tot, pool_tot, mode, Nchb=8):
     ax2 = fig.add_subplot(gs[-1, :])
     
     # 16x16 cm^2 uM chambers
-    yerr = [1/np.sqrt(pool_tot[i]) for i in range(2, 4)]
-    ax1.errorbar(range(2, 4), [eff_tot[i] for i in range(2, 4)], yerr=yerr, fmt='o',
+    yerr_sm = [1/np.sqrt(pool_tot[i]) for i in range(2, 4)]
+    ax1.errorbar(range(2, 4), [eff_tot[i] for i in range(2, 4)], yerr=yerr_sm, fmt='o',
                 label='Small MM')
     
     # 48x48 cm^2 uM chambers
-    yerr = [1/np.sqrt(pool_tot[i]) for i in range(4, 7)]
-    ax1.errorbar(range(4, 7), [eff_tot[i] for i in range(4, 7)], yerr=yerr, fmt='s',
+    yerr_lm = [1/np.sqrt(pool_tot[i]) for i in range(4, 7)]
+    ax1.errorbar(range(4, 7), [eff_tot[i] for i in range(4, 7)], yerr=yerr_lm, fmt='s',
                 label='large MM')
     yerr = [1/np.sqrt(pool_tot[i]) for i in range(7, Nchb+1)]
     
@@ -251,6 +273,16 @@ def plot_eff(eff_tot, pool_tot, mode, Nchb=8):
     del(fig)
     print('| ASU | Effieicny [%] | number of tested tracks|')
     print('|------|----------------|-----------------------|')
+    for i in range(2, 4):
+        print("|layer {} | {:.2}+\-{:.2} \t| {} |".format(i,
+                                                  eff_tot[i]*100,
+                                                  yerr_sm[i-2]*100,
+                                                  pool_tot[i]))
+    for i in range(4, 7):
+        print("|layer {} | {:.2}+\-{:.2} \t| {} |".format(i,
+                                                  eff_tot[i]*100,
+                                                  yerr_lm[i-4]*100,
+                                                  pool_tot[i]))
     for i in range(7,Nchb+1):
         print("|{} | {:.2}+\-{:.2} \t| {} |".format(dict_RPWELL[i],
                                                   eff_tot[i]*100,
@@ -318,7 +350,9 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--Nchb', help='number of layers in the setup',
                         default='8', choices=['8', '11', '7'])
     parser.add_argument('-e', '--energy', type=int, help='beam energy in GeV.',
-                        choices=range(1,7))
+                        choices=range(2,7))
+    parser.add_argument('-s', '--sigma', type=float, help="width of the residual's fluctuation.",
+                        default=1.)
     parser.add_argument('--mipeff', help='mip efficiency')
     parser.add_argument('-p', '--particle', help="The type of the beam's particle.",
                         default='pions', choices=('pions', 'electrons'))
@@ -329,8 +363,8 @@ if __name__ == "__main__":
         energy = '{}GeV'.format(args.energy)
         particle = args.particle
         mipeff = args.mipeff
-        if mipeff not in list(mc.MAX_FILES[particle][energy].keys()):
-            raise ValueError('Out of range for specific energy: mipeff.')
+        # if mipeff not in list(mc.MAX_FILES[particle][energy].keys()):
+        #     raise ValueError('Out of range for specific energy: mipeff.')
     Nchb = int(args.Nchb)
 
     warnings.simplefilter('ignore', np.RankWarning)
@@ -340,7 +374,7 @@ if __name__ == "__main__":
         raise ValueError('Not a valid type of analysis mode.')
 
     if mode == 'MC':
-        eff_tot, pool_tot, mult_tot = eff_MC(energy, mipeff, particle=particle, Nchb=Nchb)
+        eff_tot, pool_tot, mult_tot = eff_MC(energy, mipeff, args.sigma, particle=particle, Nchb=Nchb)
         plot_eff(eff_tot, pool_tot, 'MC', Nchb)
         plot_mult(mult_tot, 'MC', Nchb)
     else:

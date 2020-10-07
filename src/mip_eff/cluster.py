@@ -40,11 +40,11 @@ class cluster:
         return seed
     
 
-    def cluster(self, p, radius=2):
+    def cluster(self, p, radius=2, verbose=False):
         seed = self.seeding(p, radius)
         members = []
         if len(seed) == 0:
-            print("no seed found!")
+            if verbose: print("no seed found!")
             return []
         for i in range(self._points.shape[0]):
             if i == seed[0]:
