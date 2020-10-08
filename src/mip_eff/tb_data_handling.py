@@ -279,7 +279,7 @@ def cleaning(df, mode, time_wins=[15], verbose=True):
     return df_batch, df_batch.shape[0]
 
 
-def isMIP(df_batch, mode, Nchb=8, res=1, verbose=True, maxnhits=2):
+def isMIP(df_batch, mode, Nchb=8, res=1, verbose=True, maxnhits=2, tolerance=2):
     """Returns the list of MIP events using strict selection for detection efficiency estimation
     Parameters:
     -----------
@@ -322,11 +322,11 @@ def isMIP(df_batch, mode, Nchb=8, res=1, verbose=True, maxnhits=2):
     
     # UPDATE 06-01-2020: keep only tracks with least Nchb-1 MIP-like layers
     df_mip_evt = df_mip.groupby(dataId).agg(lambda x: len(set(x)))
-    valid_trks = df_mip_evt[df_mip_evt['chbid'] > Nchb-2].index.tolist()
+    valid_trks = df_mip_evt[df_mip_evt['chbid'] > (Nchb - tolerance)].index.tolist()
     df_mip = df_mip[df_mip[dataId].isin(valid_trks)]    
     if verbose: print('{:.2%} valid tracks'.format(len(valid_trks)/len(df_batch[dataId].unique().tolist())))
     
-    # preparing for fit
+    # preparing for fit 
     tofit = df_mip.groupby(dataId).agg(lambda x: x.tolist())[['chbid', 'xpos', 'ypos', 'nhits']]
     tofit_xyz = tofit.loc[:, ['xpos', 'ypos']].applymap(lambda x: np.concatenate(np.array(x)).ravel())
     tofit_z = pd.DataFrame({'z':list(zip(tofit.chbid, tofit.nhits)), dataId: tofit.index.tolist()})
